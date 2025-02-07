@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+
+# Model and Data
+data/models/
+data/vector_store/
+*.gguf
+
+# Environment
+.env
+.env.local
+
+# Database
+*.db
+

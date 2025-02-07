@@ -1,0 +1,202 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="bg-white shadow rounded-lg p-6" x-data="trainingInterface()">
+    <h2 class="text-2xl font-bold mb-6">Training Interface</h2>
+
+    <!-- Document Selection -->
+    <div class="mb-6">
+        <h3 class="text-lg font-medium mb-4">Select Documents for Training</h3>
+        <div class="space-y-4 max-h-60 overflow-y-auto custom-scrollbar">
+            <template x-for="doc in documents" :key="doc.id">
+                <div class="flex items-center space-x-3 p-3 hover:bg-gray-50 rounded-lg">
+                    <input type="checkbox" :id="'doc-' + doc.id" :value="doc.id" x-model="selectedDocs"
+                        class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded">
+                    <label :for="'doc-' + doc.id" class="flex-1">
+                        <div x-text="doc.title" class="font-medium"></div>
+                        <div x-text="doc.description" class="text-sm text-gray-500"></div>
+                    </label>
+                </div>
+            </template>
+        </div>
+    </div>
+
+    <!-- Training Parameters -->
+    <div class="mb-6">
+        <h3 class="text-lg font-medium mb-4">Training Parameters</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Epochs</label>
+                <input type="number" x-model="epochs" min="1" max="10"
+                    class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Learning Rate</label>
+                <select x-model="learningRate"
+                    class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 rounded-md">
+                    <option value="0.001">0.001 (Default)</option>
+                    <option value="0.0001">0.0001 (Fine-tuning)</option>
+                    <option value="0.01">0.01 (Fast learning)</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <!-- Training Controls -->
+    <div class="flex justify-between items-center mb-6">
+        <button @click="startTraining" :disabled="!canStartTraining"
+            :class="{'opacity-50 cursor-not-allowed': !canStartTraining}"
+            class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+            <span x-show="!isTraining">Start Training</span>
+            <span x-show="isTraining">Training in Progress...</span>
+        </button>
+
+        <div x-show="isTraining" class="flex items-center space-x-2">
+            <div class="loading-spinner"></div>
+            <span x-text="progressText"></span>
+        </div>
+    </div>
+
+    <!-- Training Status -->
+    <div x-show="isTraining || lastTrainingResult" class="border rounded-lg p-4">
+        <h3 class="text-lg font-medium mb-2">Training Status</h3>
+
+        <div x-show="isTraining">
+            <div class="relative pt-1">
+                <div class="flex mb-2 items-center justify-between">
+                    <div>
+                        <span
+                            class="text-xs font-semibold inline-block py-1 px-2 uppercase rounded-full text-indigo-600 bg-indigo-200">
+                            Progress
+                        </span>
+                    </div>
+                    <div class="text-right">
+                        <span class="text-xs font-semibold inline-block text-indigo-600" x-text="progress + '%'">
+                        </span>
+                    </div>
+                </div>
+                <div class="overflow-hidden h-2 mb-4 text-xs flex rounded bg-indigo-200">
+                    <div :style="'width: ' + progress + '%'"
+                        class="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center bg-indigo-500 transition-all duration-300">
+                    </div>
+                </div>
+            </div>
+
+            <div class="text-sm text-gray-500" x-text="statusMessage"></div>
+        </div>
+
+        <div x-show="lastTrainingResult" class="space-y-2">
+            <div class="flex justify-between items-center">
+                <span class="text-sm font-medium">Last Training Result:</span>
+                <span x-text="lastTrainingResult.timestamp" class="text-sm text-gray-500"></span>
+            </div>
+            <div x-text="lastTrainingResult.message"
+                :class="{'text-green-600': lastTrainingResult.success, 'text-red-600': !lastTrainingResult.success}"
+                class="text-sm">
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function trainingInterface() {
+        return {
+            documents: [],
+            selectedDocs: [],
+            epochs: 5,
+            learningRate: '0.001',
+            isTraining: false,
+            progress: 0,
+            statusMessage: '',
+            lastTrainingResult: null,
+
+            async init() {
+                await this.loadDocuments();
+            },
+
+            async loadDocuments() {
+                try {
+                    const response = await fetch('/admin/documents');
+                    if (response.ok) {
+                        this.documents = await response.json();
+                    }
+                } catch (error) {
+                    notifications.show('Failed to load documents', 'error');
+                }
+            },
+
+            get canStartTraining() {
+                return this.selectedDocs.length > 0 && !this.isTraining;
+            },
+
+            get progressText() {
+                return `Training Progress: ${this.progress}%`;
+            },
+
+            async startTraining() {
+                if (!this.canStartTraining) return;
+
+                this.isTraining = true;
+                this.progress = 0;
+                this.statusMessage = 'Initializing training...';
+
+                try {
+                    const response = await fetch('/admin/train', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            documentIds: this.selectedDocs,
+                            epochs: this.epochs,
+                            learningRate: parseFloat(this.learningRate)
+                        })
+                    });
+
+                    if (!response.ok) throw new Error('Training failed to start');
+
+                    const { trainingId } = await response.json();
+                    await this.monitorTraining(trainingId);
+                } catch (error) {
+                    notifications.show('Failed to start training: ' + error.message, 'error');
+                    this.isTraining = false;
+                }
+            },
+
+            async monitorTraining(trainingId) {
+                const checkStatus = async () => {
+                    try {
+                        const response = await fetch(`/admin/train/${trainingId}/status`);
+                        if (!response.ok) throw new Error('Failed to get status');
+
+                        const status = await response.json();
+                        this.progress = status.progress;
+                        this.statusMessage = status.message;
+
+                        if (status.completed) {
+                            this.isTraining = false;
+                            this.lastTrainingResult = {
+                                success: status.success,
+                                message: status.message,
+                                timestamp: new Date().toLocaleString()
+                            };
+                            notifications.show('Training completed!', status.success ? 'success' : 'error');
+                            return;
+                        }
+
+                        setTimeout(checkStatus, 1000);
+                    } catch (error) {
+                        this.isTraining = false;
+                        notifications.show('Failed to monitor training status', 'error');
+                    }
+                };
+
+                await checkStatus();
+            }
+        }
+    }
+</script>
+{% endblock %}

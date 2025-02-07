@@ -1,0 +1,8 @@
+Metadata-Version: 2.2
+Name: superteam-vietnam
+Version: 0.1
+Requires-Dist: python-telegram-bot
+Requires-Dist: python-dotenv
+Requires-Dist: langchain
+Requires-Dist: chromadb
+Dynamic: requires-dist

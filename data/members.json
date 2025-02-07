@@ -1,0 +1,49 @@
+[
+    {
+        "name": "John Dao",
+        "skills": [
+            "Rust",
+            "DeFi",
+            "Smart Contracts",
+            "Twitter API"
+        ],
+        "projects": [
+            "DeFi Protocol",
+            "Social Integration"
+        ],
+        "availability": true,
+        "telegram_id": "johndao",
+        "twitter_handle": "@johndao"
+    },
+    {
+        "name": "Alice Nguyen",
+        "skills": [
+            "Solidity",
+            "React",
+            "Node.js",
+            "DeFi"
+        ],
+        "projects": [
+            "Web3 Dashboard",
+            "DEX Interface"
+        ],
+        "availability": true,
+        "telegram_id": "alicenguyen",
+        "twitter_handle": "@alicenguyen"
+    },
+    {
+        "name": "Bob Le",
+        "skills": [
+            "Rust",
+            "Blockchain",
+            "Backend"
+        ],
+        "projects": [
+            "NFT Platform",
+            "Data Analytics"
+        ],
+        "availability": false,
+        "telegram_id": "boble",
+        "twitter_handle": "@boble"
+    }
+]

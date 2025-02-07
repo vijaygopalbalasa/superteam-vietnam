@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: superteam-vietnam-bot
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m app.main
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.9.18

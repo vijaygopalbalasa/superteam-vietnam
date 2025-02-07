@@ -1,0 +1,102 @@
+/* Custom styles on top of Tailwind */
+
+/* Fade in animation for notifications */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.notification-enter {
+    animation: fadeIn 0.3s ease-out;
+}
+
+/* Custom file upload button */
+.file-upload-button {
+    @apply inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500;
+}
+
+/* Custom scrollbar */
+.custom-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: #4f46e5 #e5e7eb;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+    width: 8px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+    background: #e5e7eb;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background-color: #4f46e5;
+    border-radius: 4px;
+}
+
+/* Document card hover effect */
+.document-card {
+    transition: transform 0.2s ease-in-out;
+}
+
+.document-card:hover {
+    transform: translateY(-2px);
+}
+
+/* Loading spinner */
+.loading-spinner {
+    border: 3px solid #f3f3f3;
+    border-top: 3px solid #4f46e5;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% {
+        transform: rotate(0deg);
+    }
+
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+/* Form input focus states */
+.form-input:focus {
+    @apply ring-2 ring-indigo-500 border-indigo-500;
+}
+
+/* Status badges */
+.status-badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+}
+
+.status-badge-success {
+    @apply bg-green-100 text-green-800;
+}
+
+.status-badge-error {
+    @apply bg-red-100 text-red-800;
+}
+
+.status-badge-warning {
+    @apply bg-yellow-100 text-yellow-800;
+}
+
+/* Modal styles */
+.modal-backdrop {
+    @apply fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity;
+}
+
+.modal-content {
+    @apply inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full;
+}
