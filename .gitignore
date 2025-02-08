@@ -1,18 +1,33 @@
+# Virtual Environment
+venv/
+env/
+
 # Python
 __pycache__/
 *.py[cod]
-*$py.class
-venv/
+*.so
 
-# Model and Data
-data/models/
-data/vector_store/
-*.gguf
-
-# Environment
+# Environment Variables
 .env
-.env.local
 
 # Database
 *.db
+*.sqlite3
 
+# Local LLM Models
+data/models/*.gguf
+
+# Logs
+*.log
+
+# IDE
+.vscode/
+.idea/
+
+# Uploaded Files
+data/uploads/*
+!data/uploads/.gitkeep
+
+# Vector Store
+data/vector_store/*
+!data/vector_store/.gitkeep

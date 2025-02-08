@@ -128,38 +128,52 @@ class EnhancedRAGSystem:
     def _load_knowledge_base(self):
         """Load initial knowledge base content"""
         try:
-            kb_path = Path("data/knowledge_base/about.txt")
-            logger.info(f"Loading knowledge base from: {kb_path}")
+            # Use absolute path for better debugging
+            kb_path = Path("data/knowledge_base/about.txt").absolute()
+            logger.info(f"Attempting to load knowledge base from: {kb_path}")
             
             if not kb_path.exists():
-                logger.warning("Knowledge base file not found")
+                logger.error(f"Knowledge base file not found at {kb_path}")
                 return
             
             with open(kb_path, 'r', encoding='utf-8') as f:
                 content = f.read().strip()
-            
+                logger.info(f"Loaded content length: {len(content)}")
+                logger.info(f"Content preview: {content[:100]}...")
+
             if not content:
-                logger.warning("Knowledge base file is empty")
+                logger.error("Knowledge base file is empty")
                 return
-                
-            # Add to vector store
+
+            # Split content into smaller chunks
             chunks = self.text_splitter.split_text(content)
-            logger.info(f"Split knowledge base into {len(chunks)} chunks")
-            
-            # Add chunks to vector store with metadata
-            self.vector_store.add_texts(
-                texts=chunks,
-                metadatas=[{
-                    "source": "knowledge_base",
-                    "chunk_index": i,
-                    "total_chunks": len(chunks)
-                } for i in range(len(chunks))]
+            logger.info(f"Split content into {len(chunks)} chunks")
+
+            # Clear existing data
+            self.vector_store.delete_collection()
+            self.vector_store = Chroma(
+                persist_directory=str(Path(settings.VECTOR_STORE_PATH)),
+                embedding_function=self.embeddings
             )
-            
-            logger.info("Successfully loaded knowledge base into vector store")
+
+            # Add chunks to vector store
+            for i, chunk in enumerate(chunks):
+                self.vector_store.add_texts(
+                    texts=[chunk],
+                    metadatas=[{
+                        "source": "about.txt",
+                        "chunk_index": i,
+                        "total_chunks": len(chunks)
+                    }]
+                )
+                logger.info(f"Added chunk {i+1}/{len(chunks)}")
+
+            # Verify data was loaded
+            collection_size = len(self.vector_store.get())
+            logger.info(f"Total documents in vector store: {collection_size}")
             
         except Exception as e:
-            logger.error(f"Error loading knowledge base: {e}")
+            logger.error(f"Error loading knowledge base: {e}", exc_info=True)
             raise
 
     async def add_document(self, content: str, metadata: Optional[Dict] = None) -> bool:
@@ -208,11 +222,8 @@ class EnhancedRAGSystem:
         
         return confidence
 
-    async def query(self, question: str, confidence_threshold: float = 0.6) -> Dict:
-        """
-        Query the RAG system with confidence scoring
-        Returns a dictionary with answer and confidence score
-        """
+    async def query(self, question: str, confidence_threshold: float = 0.3) -> Dict:
+        """Query the RAG system with confidence scoring"""
         try:
             logger.info(f"Processing query: {question}")
             
@@ -223,6 +234,7 @@ class EnhancedRAGSystem:
             )
             
             if not docs_and_scores:
+                logger.warning("No relevant documents found")
                 return {
                     "answer": "I don't have enough information to answer this question accurately.",
                     "confidence": 0.0
@@ -232,10 +244,17 @@ class EnhancedRAGSystem:
             docs = [doc for doc, _ in docs_and_scores]
             scores = [score for _, score in docs_and_scores]
             
+            # Log retrieved documents for debugging
+            for i, (doc, score) in enumerate(docs_and_scores):
+                logger.info(f"Doc {i+1} score: {score}")
+                logger.info(f"Doc {i+1} preview: {doc.page_content[:100]}...")
+            
             # Calculate confidence
             confidence = self._calculate_confidence(scores)
+            logger.info(f"Calculated confidence: {confidence}")
             
             if confidence < confidence_threshold:
+                logger.warning(f"Confidence {confidence} below threshold {confidence_threshold}")
                 return {
                     "answer": "While I have some information, I'm not confident enough to provide an accurate answer to this question.",
                     "confidence": confidence
@@ -243,6 +262,7 @@ class EnhancedRAGSystem:
             
             # Combine relevant contexts
             context = "\n\n".join(doc.page_content for doc in docs)
+            logger.info(f"Combined context length: {len(context)}")
             
             # Generate answer using LLM
             response = self.chain.run(
@@ -250,13 +270,15 @@ class EnhancedRAGSystem:
                 question=question
             )
             
+            logger.info(f"Generated response: {response[:100]}...")
+            
             return {
                 "answer": response.strip(),
                 "confidence": confidence
             }
             
         except Exception as e:
-            logger.error(f"Error processing query: {e}")
+            logger.error(f"Error processing query: {e}", exc_info=True)
             return {
                 "answer": "Sorry, I encountered an error while processing your question. Please try again later.",
                 "confidence": 0.0

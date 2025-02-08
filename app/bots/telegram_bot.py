@@ -208,6 +208,17 @@ class SuperteamBot:
 
         try:
             document = update.message.document
+            logger.info(f"Received document: {document.file_name}")
+            
+            # Check file type
+            if not document.file_name.lower().endswith(('.txt', '.md')):
+                await update.message.reply_text(
+                    "❌ Invalid file type. Please upload a .txt or .md file."
+                )
+                return
+
+            # Download file
+            processing_msg = await update.message.reply_text("📥 Downloading document...")
             file = await document.get_file()
             
             upload_dir = Path("data/uploads")
@@ -216,16 +227,24 @@ class SuperteamBot:
             file_path = upload_dir / document.file_name
             await file.download_to_drive(str(file_path))
             
-            with open(file_path, 'r', encoding='utf-8') as f:
-                content = f.read()
+            await processing_msg.edit_text("📄 Reading document content...")
             
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                    logger.info(f"Successfully read file, content length: {len(content)}")
+            except UnicodeDecodeError:
+                await processing_msg.edit_text("❌ Error: File must be in UTF-8 text format.")
+                return
+                
+            # Add to knowledge base
+            await processing_msg.edit_text("🔄 Processing and adding to knowledge base...")
             metadata = {
                 "filename": document.file_name,
                 "uploaded_by": user_id,
                 "date": str(update.message.date)
             }
             
-            processing_msg = await update.message.reply_text("Processing document...")
             success = await self.rag_system.add_document(content, metadata)
             
             if success:
@@ -238,7 +257,7 @@ class SuperteamBot:
                 )
                 
         except Exception as e:
-            logger.error(f"Error handling document upload: {e}")
+            logger.error(f"Error handling document upload: {e}", exc_info=True)
             await update.message.reply_text(
                 "❌ Error processing the document. Please make sure it's a valid text file."
             )
@@ -434,31 +453,20 @@ class SuperteamBot:
             return
 
         content = " ".join(context.args)
-        processing_msg = await update.message.reply_text("🔄 Processing your tweet draft...")
+        processing_msg = await update.message.reply_text("🔄 Creating tweet draft...")
 
         result = await self.twitter_manager.create_draft(user_id, content)
         
         if result['status'] == 'success':
-            suggestions = result['suggestions']
             response = (
                 "📝 Draft Tweet Created!\n\n"
                 f"Content: {content}\n\n"
-                "Suggestions for Improvement:\n"
+                "Available Commands:\n"
+                "/improve - Get AI suggestions\n"
+                "/preview - View current draft\n"
+                "/update <text> - Update draft content\n"
+                "/publish - Post the tweet"
             )
-            
-            for improvement in suggestions['improvements']:
-                response += f"• {improvement}\n"
-            
-            if 'recommended_hashtags' in suggestions:
-                response += "\nRecommended Hashtags:\n"
-                for hashtag in suggestions['recommended_hashtags']:
-                    response += f"• {hashtag}\n"
-            
-            response += "\nAvailable Commands:\n"
-            response += "/preview - View current draft\n"
-            response += "/improve - Get more suggestions\n"
-            response += "/update <text> - Update draft content\n"
-            response += "/publish - Post the tweet"
             
             await processing_msg.edit_text(response)
         else:

@@ -20,44 +20,16 @@ class TwitterManager:
     def _setup_twitter_client(self):
         """Initialize Twitter API client"""
         try:
-            auth = tweepy.OAuthHandler(
-                settings.TWITTER_API_KEY,
-                settings.TWITTER_API_SECRET
+            self.client = tweepy.Client(
+                consumer_key=settings.TWITTER_API_KEY,
+                consumer_secret=settings.TWITTER_API_SECRET,
+                access_token=settings.TWITTER_ACCESS_TOKEN,
+                access_token_secret=settings.TWITTER_ACCESS_SECRET
             )
-            auth.set_access_token(
-                settings.TWITTER_ACCESS_TOKEN,
-                settings.TWITTER_ACCESS_SECRET
-            )
-            self.client = tweepy.API(auth)
-            
-            # Get followed accounts
-            self._update_followed_accounts()
             logger.info("Twitter client initialized successfully")
         except Exception as e:
             logger.error(f"Error initializing Twitter client: {e}")
             self.client = None
-
-    def _update_followed_accounts(self):
-        """Update the list of accounts followed by Superteam VN"""
-        try:
-            if not self.client:
-                return
-            
-            # Get followers (limited to 200 for efficiency)
-            following = self.client.get_friend_ids()
-            user_objects = self.client.lookup_users(user_id=following[:100])
-            
-            self.followed_accounts = [
-                {
-                    'id': user.id,
-                    'username': user.screen_name,
-                    'name': user.name
-                }
-                for user in user_objects
-            ]
-            logger.info(f"Updated followed accounts: {len(self.followed_accounts)} accounts")
-        except Exception as e:
-            logger.error(f"Error updating followed accounts: {e}")
 
     async def optimize_tweet(self, content: str) -> Dict:
         """Optimize a tweet using ContentAdvisor"""
@@ -88,47 +60,45 @@ class TwitterManager:
             }
 
     async def create_draft(self, user_id: str, content: str) -> Dict:
-        """Create a new tweet draft with AI-powered suggestions"""
+        """Create a new tweet draft without initial optimization"""
         try:
-            # First optimize the content
-            optimization_result = await self.optimize_tweet(content)
-            if optimization_result['status'] != 'success':
-                return optimization_result
-
-            optimized_content = optimization_result['content']
-            suggestions = optimization_result['suggestions']
-
-            # Add length-based suggestions
-            if len(optimized_content) > 240:
-                suggestions['improvements'].append("⚠️ Tweet is too long, consider shortening")
-            elif len(optimized_content) < 50:
-                suggestions['improvements'].append("Consider adding more context for better engagement")
-
-            # Check mentions against followed accounts
-            mentioned_users = [word[1:] for word in optimized_content.split() if word.startswith('@')]
-            if mentioned_users:
-                for username in mentioned_users:
-                    if not any(acc['username'].lower() == username.lower() for acc in self.followed_accounts):
-                        suggestions['improvements'].append(f"@{username} is not in followed accounts")
-
-            # Store draft with metadata
+            logger.info(f"Creating draft for user {user_id}")
+            
             self.draft_tweets[user_id] = {
-                'content': optimized_content,
+                'content': content,
                 'original_content': content,
-                'suggestions': suggestions,
                 'version': 1,
+                'suggestions': {
+                    'improvements': [],
+                    'recommended_hashtags': ['#SuperteamVN', '#Web3Vietnam', '#BuildWeb3']
+                },
                 'metrics': {
-                    'engagement_score': suggestions.get('engagement_score', 0),
-                    'best_time': suggestions.get('best_time', 'N/A')
+                    'engagement_score': 0,
+                    'best_time': 'N/A'
                 }
             }
+
+            # Basic validation
+            if len(content) > 280:
+                self.draft_tweets[user_id]['suggestions']['improvements'].append(
+                    "⚠️ Tweet exceeds 280 character limit"
+                )
+            
+            # Check mentions
+            mentioned_users = [word[1:] for word in content.split() if word.startswith('@')]
+            for username in mentioned_users:
+                if not any(acc['username'].lower() == username.lower() for acc in self.followed_accounts):
+                    self.draft_tweets[user_id]['suggestions']['improvements'].append(
+                        f"@{username} is not in followed accounts"
+                    )
 
             return {
                 'status': 'success',
                 'message': 'Draft created successfully',
-                'content': optimized_content,
-                'suggestions': suggestions
+                'content': content,
+                'suggestions': self.draft_tweets[user_id]['suggestions']
             }
+
         except Exception as e:
             logger.error(f"Error creating draft: {e}")
             return {
@@ -139,22 +109,37 @@ class TwitterManager:
     async def preview_draft(self, user_id: str) -> Dict:
         """Get the current draft for a user"""
         try:
+            logger.info(f"Getting preview for user {user_id}")
+            
             if user_id not in self.draft_tweets:
                 return {
                     'status': 'error',
-                    'message': 'No draft found'
+                    'message': 'No draft found. Use /tweet command to create a draft first.'
                 }
 
             draft = self.draft_tweets[user_id]
-            return {
+            
+            response = {
                 'status': 'success',
-                'draft': draft
+                'draft': {
+                    'content': draft['content'],
+                    'version': draft['version'],
+                    'suggestions': draft['suggestions'],
+                    'metrics': draft.get('metrics', {
+                        'engagement_score': 0,
+                        'best_time': 'N/A'
+                    })
+                }
             }
+            
+            logger.info(f"Retrieved draft version {draft['version']} for user {user_id}")
+            return response
+
         except Exception as e:
-            logger.error(f"Error getting draft: {e}")
+            logger.error(f"Error getting draft preview: {e}")
             return {
                 'status': 'error',
-                'message': 'Failed to get draft'
+                'message': 'Failed to get draft preview'
             }
 
     async def improve_draft(self, user_id: str) -> Dict:
@@ -258,18 +243,8 @@ class TwitterManager:
 
             if self.client:
                 try:
-                    # Final optimization check before posting
-                    final_check = await self.optimize_tweet(content)
-                    if final_check['status'] == 'success' and final_check['metrics']['engagement_score'] > draft['metrics']['engagement_score']:
-                        content = final_check['content']
-
-                    # Post tweet
-                    tweet = self.client.update_status(content)
-                    
-                    # Track performance metrics
-                    async with AsyncSessionLocal() as session:
-                        advisor = ContentAdvisor(self.rag_system, session)
-                        await advisor.track_performance('tweet', tweet.id, draft['metrics'])
+                    # Use v2 create_tweet method
+                    tweet = self.client.create_tweet(text=content)
                     
                     # Clear the draft
                     del self.draft_tweets[user_id]
@@ -278,10 +253,10 @@ class TwitterManager:
                         'status': 'success',
                         'message': 'Tweet published successfully',
                         'content': content,
-                        'tweet_id': tweet.id,
+                        'tweet_id': tweet.data['id'],
                         'metrics': draft['metrics']
                     }
-                except tweepy.TweepError as e:
+                except tweepy.errors.TweepyException as e:
                     logger.error(f"Twitter API error: {e}")
                     return {
                         'status': 'error',
