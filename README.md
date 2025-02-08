@@ -117,12 +117,6 @@ superteam-vietnam/
 - Role-based access control
 - Encrypted data storage
 
-## 🧪 Running Tests
-
-```bash
-pytest tests/
-```
-
 ## 🤝 Contributing
 
 1. Fork the repository
